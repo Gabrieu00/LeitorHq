@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Leitor de Quadrinhos (.CBZ)</title>
+  <title>Leitor de Quadrinhos (.CBZ) com Detecção de Painéis</title>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 20px; }
     #canvas { max-width: 90%; max-height: 80vh; margin-top: 20px; border: 1px solid #ccc; cursor: pointer; transition: all 0.3s ease; }
@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-  <h1>Leitor de Quadrinhos (.CBZ)</h1>
+  <h1>Leitor de Quadrinhos (.CBZ) com Detecção de Painéis</h1>
   <input type="file" id="fileInput" accept=".cbz" />
   <br />
   <canvas id="canvas"></canvas>
@@ -42,6 +42,7 @@
     let panels = [];
     let currentPanel = 0;
     let fullImage = null;
+    let cvReady = false;
 
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -55,6 +56,7 @@
       images = await Promise.all(imageFiles.map(name => zip.files[name].async("blob")));
 
       currentPage = 0;
+      currentPanel = 0;
       showPage(currentPage);
     });
 
@@ -68,8 +70,10 @@
         ctx.drawImage(img, 0, 0);
         pageIndicator.textContent = `Página ${index + 1} de ${images.length}`;
         fullImage = img;
+        panels = [];
+        currentPanel = 0;
 
-        if (cv && cv.imread) {
+        if (cvReady) {
           detectPanels();
         }
       };
@@ -114,69 +118,15 @@
     });
 
     function onOpenCvReady() {
+      cvReady = true;
       console.log("OpenCV.js carregado.");
+      // Se já carregou uma imagem, detecta os painéis nela
+      if (fullImage) detectPanels();
     }
 
     function detectPanels() {
       try {
         let src = cv.imread(canvas);
         let gray = new cv.Mat();
-        let blurred = new cv.Mat();
-        let edges = new cv.Mat();
-        let contours = new cv.MatVector();
-        let hierarchy = new cv.Mat();
-
-        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-        cv.Canny(blurred, edges, 60, 180);
-        cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-        panels = [];
-        for (let i = 0; i < contours.size(); i++) {
-          let cnt = contours.get(i);
-          let rect = cv.boundingRect(cnt);
-          if (rect.width > 50 && rect.height > 50) {
-            panels.push(rect);
-            let color = new cv.Scalar(255, 0, 0, 255);
-            cv.rectangle(src, new cv.Point(rect.x, rect.y), new cv.Point(rect.x + rect.width, rect.y + rect.height), color, 2);
-          }
-        }
-
-        panels.sort((a, b) => a.y - b.y || a.x - b.x);
-
-        cv.imshow(canvas, src);
-
-        src.delete(); gray.delete(); blurred.delete(); edges.delete();
-        contours.delete(); hierarchy.delete();
-        currentPanel = 0;
-      } catch (err) {
-        console.error("Erro ao detectar quadros:", err);
-      }
-    }
-
-    function zoomToPanel(index) {
-      const rect = panels[index];
-
-      const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCanvas.width = rect.width;
-      tempCanvas.height = rect.height;
-      tempCtx.drawImage(fullImage, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
-
-      const scale = Math.min(window.innerWidth * 0.9 / rect.width, window.innerHeight * 0.8 / rect.height);
-      const displayWidth = rect.width * scale;
-      const displayHeight = rect.height * scale;
-
-      canvas.style.opacity = 0;
-      setTimeout(() => {
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(tempCanvas, 0, 0, displayWidth, displayHeight);
-        canvas.style.opacity = 1;
-      }, 150);
-    }
-  </script>
-</body>
-</html>
-Atualiza o código para detecção de painéis com OpenCV.js
+        let binary = new cv.Mat();
+        let contours = new
